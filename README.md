@@ -4,7 +4,7 @@ A lightweight, Vercel-friendly farm puzzle playable ad for a mobile game.
 
 ## Concept
 
-`Sunny Farm Shuffle` is a one-move farm path puzzle. The player rotates a highlighted path tile so the flock can run from the coop to the barn, then gets an immediate install CTA.
+`Sunny Farm Shuffle` is now a moving-animal order puzzle. Animals wander around a fenced pen and the player taps the numbered targets in the correct sequence for a quick win and install CTA.
 
 ## Why this setup
 

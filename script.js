@@ -1,4 +1,4 @@
-const boardElement = document.getElementById("board");
+const penElement = document.getElementById("pen");
 const movesElement = document.getElementById("moves-count");
 const chargeElement = document.getElementById("charge-count");
 const statusElement = document.getElementById("status-text");
@@ -15,276 +15,226 @@ const ctaButtons = [
 ].filter(Boolean);
 
 const adTargetUrl = "https://play.google.com/store";
-const tutorialTarget = { row: 0, col: 2 };
-const directionOrder = ["up", "right", "down", "left"];
-const directionVectors = {
-  up: { row: -1, col: 0, opposite: "down" },
-  right: { row: 0, col: 1, opposite: "left" },
-  down: { row: 1, col: 0, opposite: "up" },
-  left: { row: 0, col: -1, opposite: "right" },
-};
+const animalSize = 58;
+const padding = 10;
+const targetOrder = ["chick", "pig", "sheep"];
 
-const baseTiles = [
-  [
-    { type: "coop", open: ["right"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "corner", open: ["left", "down"] },
-    { type: "corner", open: ["right", "down"] },
-    { type: "corner", open: ["left", "down"] },
-  ],
-  [
-    { type: "corner", open: ["right", "down"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "straight", open: ["up", "down"] },
-    { type: "corner", open: ["left", "up"] },
-    { type: "straight", open: ["left", "right"] },
-  ],
-  [
-    { type: "corner", open: ["up", "right"] },
-    { type: "corner", open: ["left", "down"] },
-    { type: "straight", open: ["up", "down"] },
-    { type: "corner", open: ["right", "down"] },
-    { type: "corner", open: ["left", "down"] },
-  ],
-  [
-    { type: "corner", open: ["right", "down"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "corner", open: ["up", "right"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "corner", open: ["left", "down"] },
-  ],
-  [
-    { type: "corner", open: ["up", "right"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "straight", open: ["left", "right"] },
-    { type: "corner", open: ["left", "up"] },
-    { type: "barn", open: ["up"] },
-  ],
-];
-
-const scrambleRotations = [
-  [0, 0, 3, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
-  [0, 0, 0, 0, 0],
+const animalDefinitions = [
+  { id: "chick", emoji: "🐥", label: "Chick", x: 26, y: 32, vx: 0.23, vy: 0.18 },
+  { id: "pig", emoji: "🐷", label: "Pig", x: 204, y: 50, vx: -0.18, vy: 0.2 },
+  { id: "sheep", emoji: "🐑", label: "Sheep", x: 118, y: 188, vx: 0.21, vy: -0.16 },
+  { id: "cow", emoji: "🐮", label: "Cow", x: 232, y: 208, vx: -0.17, vy: -0.14 },
+  { id: "duck", emoji: "🦆", label: "Duck", x: 58, y: 224, vx: 0.16, vy: -0.19 },
 ];
 
 let state = createGameState();
+let animalElements = new Map();
+let frameHandle = 0;
+let lastFrameTime = 0;
 
 function createGameState() {
-  const board = baseTiles.map((row, rowIndex) =>
-    row.map((tile, colIndex) => ({
-      ...tile,
-      row: rowIndex,
-      col: colIndex,
-      rotation: scrambleRotations[rowIndex][colIndex],
-      energized: false,
-    })),
-  );
-
   return {
-    board,
-    moves: 0,
-    charge: 3,
+    animals: animalDefinitions.map((animal) => ({ ...animal, done: false })),
+    targetIndex: 0,
+    taps: 0,
+    stars: 3,
     solved: false,
     tutorialDone: false,
   };
 }
 
-function rotateDirections(openSides, turns) {
-  return openSides.map((side) => {
-    const index = directionOrder.indexOf(side);
-    return directionOrder[(index + turns) % 4];
-  });
-}
-
-function getOpenSides(tile) {
-  return rotateDirections(tile.open, tile.rotation);
-}
-
-function renderBoard() {
-  boardElement.innerHTML = "";
+function renderPen() {
+  penElement.innerHTML = "";
+  animalElements = new Map();
   const fragment = document.createDocumentFragment();
 
-  state.board.forEach((row) => {
-    row.forEach((tile) => {
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = "cell";
-      cell.setAttribute("aria-label", `${tile.type} tile`);
-      cell.dataset.row = String(tile.row);
-      cell.dataset.col = String(tile.col);
+  state.animals.forEach((animal) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "animal";
+    button.dataset.id = animal.id;
+    button.setAttribute("aria-label", animal.label);
 
-      if (!state.tutorialDone && tile.row === tutorialTarget.row && tile.col === tutorialTarget.col) {
-        cell.classList.add("highlight");
-      }
+    const face = document.createElement("div");
+    face.className = "animal-face";
+    face.textContent = animal.emoji;
 
-      if (tile.energized) {
-        cell.classList.add("completed");
-      }
-
-      const path = document.createElement("div");
-      path.className = "cell-path";
-
-      const openSides = getOpenSides(tile);
-      const horizontal = document.createElement("div");
-      horizontal.className = `segment horizontal ${openSides.includes("left") || openSides.includes("right") ? "active" : "inactive"}`;
-      const vertical = document.createElement("div");
-      vertical.className = `segment vertical ${openSides.includes("up") || openSides.includes("down") ? "active" : "inactive"}`;
-
-      path.append(horizontal, vertical);
-      cell.appendChild(path);
-
-      openSides.forEach((side) => {
-        const hint = document.createElement("div");
-        hint.className = `direction-hint ${side}`;
-        hint.textContent =
-          side === "up" ? "↑" :
-          side === "right" ? "→" :
-          side === "down" ? "↓" : "←";
-        cell.appendChild(hint);
-      });
-
-      const core = document.createElement("div");
-      core.className = "core";
-      if (tile.type === "coop") {
-        core.classList.add("coop");
-      }
-      if (tile.type === "barn") {
-        core.classList.add("barn");
-      }
-      cell.appendChild(core);
-
-      if (tile.type === "coop" || tile.type === "barn") {
-        const label = document.createElement("div");
-        label.className = `cell-label ${tile.type}`;
-        label.textContent = tile.type === "coop" ? "Coop" : "Barn";
-        cell.appendChild(label);
-      }
-
-      fragment.appendChild(cell);
-    });
+    button.appendChild(face);
+    fragment.appendChild(button);
+    animalElements.set(animal.id, button);
   });
 
-  boardElement.appendChild(fragment);
+  penElement.appendChild(fragment);
+  paintAnimals();
 }
 
-function rotateTile(row, col) {
+function paintAnimals() {
+  state.animals.forEach((animal) => {
+    const element = animalElements.get(animal.id);
+    if (!element) {
+      return;
+    }
+
+    element.style.transform = `translate(${animal.x}px, ${animal.y}px)`;
+    element.classList.toggle("done", animal.done);
+
+    const existingTag = element.querySelector(".animal-tag");
+    if (existingTag) {
+      existingTag.remove();
+    }
+
+    const targetPosition = targetOrder.indexOf(animal.id);
+    if (!animal.done && targetPosition >= state.targetIndex) {
+      const tag = document.createElement("div");
+      tag.className = "animal-tag";
+      tag.textContent = String(targetPosition + 1);
+      if (targetPosition === state.targetIndex) {
+        element.classList.add("target");
+        element.appendChild(tag);
+      } else {
+        element.classList.remove("target");
+        tag.style.opacity = "0.55";
+        element.appendChild(tag);
+      }
+    } else {
+      element.classList.remove("target");
+    }
+  });
+}
+
+function updateAnimalPositions(delta) {
+  const penRect = penElement.getBoundingClientRect();
+  const maxX = penRect.width - animalSize - padding;
+  const maxY = penRect.height - animalSize - padding;
+
+  state.animals.forEach((animal) => {
+    if (animal.done) {
+      return;
+    }
+
+    animal.x += animal.vx * delta;
+    animal.y += animal.vy * delta;
+
+    if (animal.x <= padding || animal.x >= maxX) {
+      animal.vx *= -1;
+      animal.x = Math.max(padding, Math.min(animal.x, maxX));
+    }
+
+    if (animal.y <= padding || animal.y >= maxY) {
+      animal.vy *= -1;
+      animal.y = Math.max(padding, Math.min(animal.y, maxY));
+    }
+  });
+
+  paintAnimals();
+}
+
+function animationFrame(timestamp) {
+  if (lastFrameTime === 0) {
+    lastFrameTime = timestamp;
+  }
+
+  const delta = Math.min(2.2, (timestamp - lastFrameTime) / 16.67);
+  lastFrameTime = timestamp;
+
+  if (!state.solved) {
+    updateAnimalPositions(delta);
+    frameHandle = window.requestAnimationFrame(animationFrame);
+  }
+}
+
+function startAnimation() {
+  window.cancelAnimationFrame(frameHandle);
+  lastFrameTime = 0;
+  frameHandle = window.requestAnimationFrame(animationFrame);
+}
+
+function stopAnimation() {
+  window.cancelAnimationFrame(frameHandle);
+  frameHandle = 0;
+}
+
+function handleAnimalTap(id) {
   if (state.solved) {
     return;
   }
 
-  const tile = state.board[row][col];
-  tile.rotation = (tile.rotation + 1) % 4;
-  state.moves += 1;
-  state.charge = Math.max(1, 3 - state.moves);
-
-  if (row === tutorialTarget.row && col === tutorialTarget.col) {
-    state.tutorialDone = true;
-    tutorialCallout.classList.add("hidden");
-    statusElement.textContent = "Nice. The chicks can now run from the coop to the barn.";
-  }
-
-  updateConnectivity();
-  updateHud();
-  renderBoard();
-}
-
-function updateConnectivity() {
-  const visited = new Set();
-  const queue = [];
-  const source = state.board[0][0];
-
-  queue.push(source);
-  visited.add(keyFor(source.row, source.col));
-
-  state.board.flat().forEach((tile) => {
-    tile.energized = false;
-  });
-
-  while (queue.length > 0) {
-    const tile = queue.shift();
-    tile.energized = true;
-    const openSides = getOpenSides(tile);
-
-    openSides.forEach((side) => {
-      const vector = directionVectors[side];
-      const nextRow = tile.row + vector.row;
-      const nextCol = tile.col + vector.col;
-      const nextTile = state.board[nextRow]?.[nextCol];
-
-      if (!nextTile) {
-        return;
-      }
-
-      if (!getOpenSides(nextTile).includes(vector.opposite)) {
-        return;
-      }
-
-      const key = keyFor(nextRow, nextCol);
-      if (visited.has(key)) {
-        return;
-      }
-
-      visited.add(key);
-      queue.push(nextTile);
-    });
-  }
-
-  const solved = state.board[4][4].energized;
-
-  if (solved && !state.solved) {
-    state.solved = true;
-    state.charge = 3;
-    goalElement.textContent = "Flock delivered";
-    statusElement.textContent = "Perfect. The chicks made it to the barn.";
-    overlayMessage.textContent = `Solved in ${state.moves} move${state.moves === 1 ? "" : "s"}. Fast, satisfying, and easy to understand.`;
-    window.setTimeout(() => overlay.classList.remove("hidden"), 500);
+  const expectedId = targetOrder[state.targetIndex];
+  const tappedAnimal = state.animals.find((animal) => animal.id === id);
+  if (!tappedAnimal || tappedAnimal.done) {
     return;
   }
 
-  if (!state.solved) {
-    goalElement.textContent = "Connect coop to barn";
-    if (!state.tutorialDone) {
-      statusElement.textContent = "Turn the gold path tile so the flock can reach the barn.";
-    } else {
-      const energizedCount = state.board.flat().filter((tile) => tile.energized).length;
-      statusElement.textContent = `${energizedCount} path tile${energizedCount === 1 ? "" : "s"} connected. Keep the route going.`;
+  state.taps += 1;
+
+  if (id !== expectedId) {
+    state.stars = Math.max(1, state.stars - 1);
+    const wrongElement = animalElements.get(id);
+    if (wrongElement) {
+      wrongElement.classList.remove("wrong");
+      void wrongElement.offsetWidth;
+      wrongElement.classList.add("wrong");
     }
+    statusElement.textContent = `Not ${tappedAnimal.label}. Tap ${formatTargetName(expectedId)} next.`;
+    updateHud();
+    return;
   }
+
+  tappedAnimal.done = true;
+  state.targetIndex += 1;
+  state.tutorialDone = true;
+  tutorialCallout.classList.add("hidden");
+
+  if (state.targetIndex >= targetOrder.length) {
+    state.solved = true;
+    state.stars = 3;
+    goalElement.textContent = "All animals caught";
+    statusElement.textContent = "Perfect order. The barnyard is under control.";
+    overlayMessage.textContent = `Caught in ${state.taps} tap${state.taps === 1 ? "" : "s"}. Quick, readable, and satisfying.`;
+    updateHud();
+    paintAnimals();
+    stopAnimation();
+    window.setTimeout(() => overlay.classList.remove("hidden"), 420);
+    return;
+  }
+
+  statusElement.textContent = `Great. Now tap ${formatTargetName(targetOrder[state.targetIndex])}.`;
+  updateHud();
+  paintAnimals();
+}
+
+function formatTargetName(id) {
+  const animal = animalDefinitions.find((entry) => entry.id === id);
+  return animal ? animal.label : id;
 }
 
 function updateHud() {
-  movesElement.textContent = String(state.moves);
-  chargeElement.textContent = `${state.charge}`;
-}
-
-function keyFor(row, col) {
-  return `${row}-${col}`;
+  movesElement.textContent = String(state.taps);
+  chargeElement.textContent = String(state.stars);
 }
 
 function resetGame() {
+  stopAnimation();
   state = createGameState();
   overlay.classList.add("hidden");
   tutorialCallout.classList.remove("hidden");
-  goalElement.textContent = "Connect coop to barn";
-  statusElement.textContent = "Make a path from the coop to the barn and watch the whole route glow.";
-  updateConnectivity();
+  goalElement.textContent = "Tap 1 → 2 → 3";
+  statusElement.textContent = "The numbered animals are the targets. Tap them in sequence while they wander.";
   updateHud();
-  renderBoard();
+  renderPen();
+  startAnimation();
 }
 
-replayButton.addEventListener("click", resetGame);
-
-boardElement.addEventListener("click", (event) => {
-  const cell = event.target.closest(".cell");
-  if (!cell || state.solved) {
+penElement.addEventListener("click", (event) => {
+  const animal = event.target.closest(".animal");
+  if (!animal) {
     return;
   }
 
-  rotateTile(Number(cell.dataset.row), Number(cell.dataset.col));
+  handleAnimalTap(animal.dataset.id);
 });
+
+replayButton.addEventListener("click", resetGame);
 
 ctaButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -292,6 +242,6 @@ ctaButtons.forEach((button) => {
   });
 });
 
-updateConnectivity();
 updateHud();
-renderBoard();
+renderPen();
+startAnimation();

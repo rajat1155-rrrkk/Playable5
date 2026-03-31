@@ -60,6 +60,16 @@ button {
     var(--frame);
   box-shadow: 0 18px 40px var(--shadow);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  overflow: hidden;
+}
+
+.game-frame::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(140deg, rgba(255, 255, 255, 0.32), transparent 26%, transparent 70%, rgba(255, 255, 255, 0.18));
+  opacity: 0.5;
 }
 
 .game-frame.celebrate {
@@ -265,6 +275,17 @@ h2 {
   border: 2px dashed rgba(255, 255, 255, 0.16);
 }
 
+.pen-glow {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 16% 22%, rgba(255, 255, 255, 0.16), transparent 10%),
+    radial-gradient(circle at 72% 28%, rgba(255, 255, 255, 0.13), transparent 9%),
+    radial-gradient(circle at 38% 78%, rgba(255, 255, 255, 0.12), transparent 8%);
+  animation: pen-glow 6s ease-in-out infinite alternate;
+}
+
 .pen.flash {
   box-shadow:
     inset 0 0 0 2px rgba(255, 255, 255, 0.22),
@@ -311,6 +332,15 @@ h2 {
 .animal.done {
   opacity: 0.6;
   --scale: 0.9;
+}
+
+.animal.exiting {
+  pointer-events: none;
+  animation: animal-exit 0.46s ease forwards;
+}
+
+.animal.spawn-in {
+  animation: animal-spawn 0.4s ease;
 }
 
 .animal.wrong {
@@ -392,6 +422,22 @@ h2 {
 
 .animal-burst::after {
   animation: burst-ring 0.45s ease-out 0.08s;
+}
+
+.dust-puff {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  width: 12px;
+  height: 12px;
+  margin-left: -6px;
+  border-radius: 999px;
+  background: rgba(255, 241, 213, 0.9);
+  box-shadow:
+    -12px -2px 0 2px rgba(255, 241, 213, 0.68),
+    12px 1px 0 1px rgba(255, 241, 213, 0.56);
+  pointer-events: none;
+  animation: dust-puff 0.5s ease-out forwards;
 }
 
 .score-float {
@@ -552,6 +598,17 @@ h2 {
   }
 }
 
+@keyframes pen-glow {
+  0% {
+    transform: translateY(0);
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(-6px);
+    opacity: 0.95;
+  }
+}
+
 @keyframes prompt-success {
   0% {
     transform: scale(1);
@@ -587,6 +644,39 @@ h2 {
   }
   100% {
     transform: scale(1);
+  }
+}
+
+@keyframes animal-exit {
+  0% {
+    opacity: 1;
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1.02);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--x, 0px), calc(var(--y, 0px) - 18px)) rotate(calc(var(--tilt, 0deg) + 6deg)) scale(0.72);
+  }
+}
+
+@keyframes animal-spawn {
+  0% {
+    opacity: 0;
+    transform: translate(var(--x, 0px), calc(var(--y, 0px) + 16px)) rotate(var(--tilt, 0deg)) scale(0.76);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1);
+  }
+}
+
+@keyframes dust-puff {
+  0% {
+    opacity: 0.8;
+    transform: translateY(0) scale(0.8);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-10px) scale(1.4);
   }
 }
 

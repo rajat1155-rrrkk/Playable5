@@ -34,6 +34,7 @@ let frameHandle = 0;
 let lastFrameTime = 0;
 let promptBumpHandle = 0;
 let celebrationHandle = 0;
+let roundAdvanceHandle = 0;
 
 function createGameState() {
   return {
@@ -47,6 +48,7 @@ function createGameState() {
     score: 0,
     streak: 0,
     paused: false,
+    roundLocked: false,
     tutorialDone: false,
     currentQuestion: null,
   };
@@ -98,7 +100,21 @@ function assignRoundValues() {
   state.animals.forEach((animal, index) => {
     animal.value = shuffledValues[index];
     animal.done = false;
+    animal.exiting = false;
+    animal.spawnIn = true;
+    animal.phase = index * 0.9 + randomInt(0, 10) * 0.1;
+    animal.x = randomInt(padding, 250);
+    animal.y = randomInt(padding, 250);
+    animal.vx = (Math.random() * 0.26 + 0.12) * (Math.random() > 0.5 ? 1 : -1);
+    animal.vy = (Math.random() * 0.22 + 0.12) * (Math.random() > 0.5 ? 1 : -1);
   });
+
+  window.setTimeout(() => {
+    state.animals.forEach((animal) => {
+      animal.spawnIn = false;
+    });
+    paintAnimals();
+  }, 420);
 }
 
 function renderPen() {
@@ -139,6 +155,8 @@ function paintAnimals() {
     element.style.setProperty("--y", `${animal.y + bob}px`);
     element.style.setProperty("--tilt", `${tilt}deg`);
     element.classList.toggle("done", animal.done);
+    element.classList.toggle("exiting", Boolean(animal.exiting));
+    element.classList.toggle("spawn-in", Boolean(animal.spawnIn));
 
     const existingTag = element.querySelector(".animal-tag");
     if (existingTag) {
@@ -151,7 +169,7 @@ function paintAnimals() {
     element.appendChild(tag);
 
     const currentRound = state.currentQuestion;
-    const isCurrentAnswer = !state.paused && currentRound && animal.value === currentRound.answer;
+    const isCurrentAnswer = !state.paused && !state.roundLocked && currentRound && animal.value === currentRound.answer;
     element.classList.toggle("target", isCurrentAnswer);
   });
 }
@@ -162,7 +180,7 @@ function updateAnimalPositions(delta) {
   const maxY = penRect.height - animalSize - padding;
 
   state.animals.forEach((animal) => {
-    if (animal.done) {
+    if (animal.done || animal.exiting) {
       return;
     }
 
@@ -263,8 +281,28 @@ function showMilestoneOverlay() {
   overlay.classList.remove("hidden");
 }
 
+function spawnDust(element) {
+  const puff = document.createElement("div");
+  puff.className = "dust-puff";
+  element.appendChild(puff);
+  window.setTimeout(() => puff.remove(), 520);
+}
+
+function advanceRound() {
+  assignRoundValues();
+  state.roundLocked = false;
+  statusElement.textContent = `Correct. New round: solve ${state.currentQuestion.prompt}.`;
+  pulsePrompt();
+  updateHud();
+  paintAnimals();
+
+  if (state.score % 5 === 0) {
+    window.setTimeout(showMilestoneOverlay, 280);
+  }
+}
+
 function handleAnimalTap(id) {
-  if (state.paused) {
+  if (state.paused || state.roundLocked) {
     return;
   }
 
@@ -298,8 +336,11 @@ function handleAnimalTap(id) {
   state.score += 1;
   state.streak += 1;
   state.roundIndex += 1;
+  state.roundLocked = true;
   state.tutorialDone = true;
   tutorialCallout.classList.add("hidden");
+  tappedAnimal.done = true;
+  tappedAnimal.exiting = true;
   if (tappedElement) {
     tappedElement.classList.remove("correct-hit");
     tappedElement.classList.remove("score-pop");
@@ -308,18 +349,14 @@ function handleAnimalTap(id) {
     tappedElement.classList.add("score-pop");
     burstAnimal(tappedElement);
     spawnScoreFloat(tappedElement, `+1`);
+    spawnDust(tappedElement);
   }
   celebratePen();
   pulseSuccessPrompt();
-  assignRoundValues();
-  statusElement.textContent = `Correct. New round: solve ${state.currentQuestion.prompt}.`;
-  pulsePrompt();
   updateHud();
   paintAnimals();
-
-  if (state.score % 5 === 0) {
-    window.setTimeout(showMilestoneOverlay, 280);
-  }
+  window.clearTimeout(roundAdvanceHandle);
+  roundAdvanceHandle = window.setTimeout(advanceRound, 520);
 }
 
 function updateHud() {
@@ -335,6 +372,7 @@ function updateHud() {
 
 function resetGame() {
   stopAnimation();
+  window.clearTimeout(roundAdvanceHandle);
   state = createGameState();
   assignRoundValues();
   overlay.classList.add("hidden");

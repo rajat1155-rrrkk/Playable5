@@ -19,9 +19,6 @@ const ctaButtons = [
 const adTargetUrl = "https://play.google.com/store";
 const animalSize = 58;
 const padding = 10;
-const roundDurationMs = 5000;
-const autoRestartDelayMs = 1500;
-const bestScoreKey = "sunny-farm-shuffle-best-score";
 
 const animalDefinitions = [
   { id: "chick", emoji: "🐥", label: "Chick", value: 5, x: 26, y: 32, vx: 0.23, vy: 0.18 },
@@ -38,8 +35,6 @@ let lastFrameTime = 0;
 let promptBumpHandle = 0;
 let celebrationHandle = 0;
 let roundAdvanceHandle = 0;
-let autoRestartHandle = 0;
-const persistedBestScore = Number(window.localStorage.getItem(bestScoreKey) || "0");
 
 function createGameState() {
   return {
@@ -51,13 +46,11 @@ function createGameState() {
     roundIndex: 0,
     taps: 0,
     score: 0,
-    bestScore: Number.isFinite(persistedBestScore) ? persistedBestScore : 0,
     streak: 0,
     paused: false,
     roundLocked: false,
     tutorialDone: false,
     currentQuestion: null,
-    timeLeftMs: roundDurationMs,
   };
 }
 
@@ -218,13 +211,7 @@ function animationFrame(timestamp) {
   lastFrameTime = timestamp;
 
   if (!state.paused) {
-    state.timeLeftMs = Math.max(0, state.timeLeftMs - (timestamp - lastFrameTime));
     updateAnimalPositions(delta);
-    updateHud();
-    if (state.timeLeftMs <= 0) {
-      finishRound();
-      return;
-    }
     frameHandle = window.requestAnimationFrame(animationFrame);
   }
 }
@@ -254,12 +241,6 @@ function pulseSuccessPrompt() {
   mathPromptElement.classList.remove("success");
   void mathPromptElement.offsetWidth;
   mathPromptElement.classList.add("success");
-}
-
-function pulseFinalPrompt() {
-  mathPromptElement.classList.remove("final");
-  void mathPromptElement.offsetWidth;
-  mathPromptElement.classList.add("final");
 }
 
 function celebratePen() {
@@ -293,21 +274,11 @@ function spawnScoreFloat(element, text) {
   window.setTimeout(() => float.remove(), 760);
 }
 
-function finishRound() {
+function showMilestoneOverlay() {
   state.paused = true;
   stopAnimation();
-  state.roundLocked = true;
-  state.bestScore = Math.max(state.bestScore, state.score);
-  window.localStorage.setItem(bestScoreKey, String(state.bestScore));
-  goalElement.textContent = "0.0s";
-  pulseFinalPrompt();
-  overlayMessage.textContent = `Score ${state.score}. Best ${state.bestScore}. New round starts in a moment.`;
+  overlayMessage.textContent = `Score ${state.score}. Fresh math questions keep coming, and the animals keep getting harder to catch.`;
   overlay.classList.remove("hidden");
-  updateHud();
-  window.clearTimeout(autoRestartHandle);
-  autoRestartHandle = window.setTimeout(() => {
-    resetGame();
-  }, autoRestartDelayMs);
 }
 
 function spawnDust(element) {
@@ -324,6 +295,10 @@ function advanceRound() {
   pulsePrompt();
   updateHud();
   paintAnimals();
+
+  if (state.score % 5 === 0) {
+    window.setTimeout(showMilestoneOverlay, 280);
+  }
 }
 
 function handleAnimalTap(id) {
@@ -385,28 +360,26 @@ function handleAnimalTap(id) {
 }
 
 function updateHud() {
-  movesElement.textContent = String(state.score);
-  chargeElement.textContent = String(state.bestScore);
-  goalElement.textContent = `${(state.timeLeftMs / 1000).toFixed(1)}s`;
+  movesElement.textContent = String(state.taps);
+  chargeElement.textContent = String(state.score);
   const currentRound = state.currentQuestion;
-  if (currentRound && !state.paused) {
+  if (currentRound) {
     mathPromptElement.textContent = `${currentRound.prompt} = ?`;
   } else {
-    mathPromptElement.textContent = "Time!";
+    mathPromptElement.textContent = "?";
   }
 }
 
 function resetGame() {
   stopAnimation();
   window.clearTimeout(roundAdvanceHandle);
-  window.clearTimeout(autoRestartHandle);
   state = createGameState();
   assignRoundValues();
   overlay.classList.add("hidden");
   state.paused = false;
-  state.roundLocked = false;
   tutorialCallout.classList.remove("hidden");
-  statusElement.textContent = "Solve as many moving farm math puzzles as you can before the timer runs out.";
+  goalElement.textContent = "Solve forever";
+  statusElement.textContent = "Each round shuffles new numbers onto the animals. Solve the sum, then catch the right answer.";
   updateHud();
   renderPen();
   startAnimation();
@@ -430,9 +403,9 @@ overlay.addEventListener("click", (event) => {
 });
 
 replayButton.addEventListener("click", () => {
-  window.clearTimeout(autoRestartHandle);
   overlay.classList.add("hidden");
-  resetGame();
+  state.paused = false;
+  startAnimation();
 });
 
 ctaButtons.forEach((button) => {

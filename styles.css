@@ -239,10 +239,6 @@ h2 {
   animation: prompt-success 0.36s ease;
 }
 
-.math-pill.final {
-  animation: final-prompt 0.5s ease;
-}
-
 .pen {
   position: relative;
   width: min(100%, 330px);
@@ -619,18 +615,6 @@ h2 {
   }
   45% {
     transform: scale(1.08);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-@keyframes final-prompt {
-  0% {
-    transform: scale(1);
-  }
-  35% {
-    transform: scale(1.1);
   }
   100% {
     transform: scale(1);

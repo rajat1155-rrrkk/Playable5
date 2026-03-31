@@ -239,6 +239,10 @@ h2 {
   animation: prompt-success 0.36s ease;
 }
 
+.math-pill.timeout {
+  animation: timeout-flash 0.45s ease;
+}
+
 .pen {
   position: relative;
   width: min(100%, 330px);
@@ -641,6 +645,19 @@ h2 {
   }
   40% {
     transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes timeout-flash {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.08);
+    box-shadow: 0 0 0 3px rgba(243, 106, 119, 0.16);
   }
   100% {
     transform: scale(1);

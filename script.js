@@ -19,6 +19,8 @@ const ctaButtons = [
 const adTargetUrl = "https://play.google.com/store";
 const animalSize = 58;
 const padding = 10;
+const runDurationMs = 5000;
+const bestScoreStorageKey = "playable5_best_score";
 
 const animalDefinitions = [
   { id: "chick", emoji: "🐥", label: "Chick", value: 5, x: 26, y: 32, vx: 0.23, vy: 0.18 },
@@ -35,6 +37,7 @@ let lastFrameTime = 0;
 let promptBumpHandle = 0;
 let celebrationHandle = 0;
 let roundAdvanceHandle = 0;
+const storedBestScore = Number(window.localStorage.getItem(bestScoreStorageKey) || "0");
 
 function createGameState() {
   return {
@@ -46,11 +49,13 @@ function createGameState() {
     roundIndex: 0,
     taps: 0,
     score: 0,
+    bestScore: Number.isFinite(storedBestScore) ? storedBestScore : 0,
     streak: 0,
     paused: false,
     roundLocked: false,
     tutorialDone: false,
     currentQuestion: null,
+    timeLeftMs: runDurationMs,
   };
 }
 
@@ -207,11 +212,18 @@ function animationFrame(timestamp) {
     lastFrameTime = timestamp;
   }
 
+  const frameDelta = timestamp - lastFrameTime;
   const delta = Math.min(2.2, (timestamp - lastFrameTime) / 16.67);
   lastFrameTime = timestamp;
 
   if (!state.paused) {
+    state.timeLeftMs = Math.max(0, state.timeLeftMs - frameDelta);
     updateAnimalPositions(delta);
+    updateHud();
+    if (state.timeLeftMs <= 0) {
+      finishRun();
+      return;
+    }
     frameHandle = window.requestAnimationFrame(animationFrame);
   }
 }
@@ -241,6 +253,12 @@ function pulseSuccessPrompt() {
   mathPromptElement.classList.remove("success");
   void mathPromptElement.offsetWidth;
   mathPromptElement.classList.add("success");
+}
+
+function pulseTimeoutPrompt() {
+  mathPromptElement.classList.remove("timeout");
+  void mathPromptElement.offsetWidth;
+  mathPromptElement.classList.add("timeout");
 }
 
 function celebratePen() {
@@ -274,10 +292,16 @@ function spawnScoreFloat(element, text) {
   window.setTimeout(() => float.remove(), 760);
 }
 
-function showMilestoneOverlay() {
+function finishRun() {
   state.paused = true;
   stopAnimation();
-  overlayMessage.textContent = `Score ${state.score}. Fresh math questions keep coming, and the animals keep getting harder to catch.`;
+  state.roundLocked = true;
+  state.bestScore = Math.max(state.bestScore, state.score);
+  window.localStorage.setItem(bestScoreStorageKey, String(state.bestScore));
+  goalElement.textContent = "0.0s";
+  overlayMessage.textContent = `Score ${state.score}. Best ${state.bestScore}. Tap Play Again to try again.`;
+  statusElement.textContent = `Time up. You scored ${state.score}. Best score is ${state.bestScore}.`;
+  pulseTimeoutPrompt();
   overlay.classList.remove("hidden");
 }
 
@@ -289,20 +313,19 @@ function spawnDust(element) {
 }
 
 function advanceRound() {
+  if (state.paused) {
+    return;
+  }
   assignRoundValues();
   state.roundLocked = false;
   statusElement.textContent = `Correct. New round: solve ${state.currentQuestion.prompt}.`;
   pulsePrompt();
   updateHud();
   paintAnimals();
-
-  if (state.score % 5 === 0) {
-    window.setTimeout(showMilestoneOverlay, 280);
-  }
 }
 
 function handleAnimalTap(id) {
-  if (state.paused || state.roundLocked) {
+  if (state.paused || state.roundLocked || state.timeLeftMs <= 0) {
     return;
   }
 
@@ -360,13 +383,14 @@ function handleAnimalTap(id) {
 }
 
 function updateHud() {
-  movesElement.textContent = String(state.taps);
-  chargeElement.textContent = String(state.score);
+  movesElement.textContent = String(state.score);
+  chargeElement.textContent = String(state.bestScore);
+  goalElement.textContent = `${(state.timeLeftMs / 1000).toFixed(1)}s`;
   const currentRound = state.currentQuestion;
-  if (currentRound) {
+  if (currentRound && !state.paused) {
     mathPromptElement.textContent = `${currentRound.prompt} = ?`;
   } else {
-    mathPromptElement.textContent = "?";
+    mathPromptElement.textContent = "Time!";
   }
 }
 
@@ -377,9 +401,9 @@ function resetGame() {
   assignRoundValues();
   overlay.classList.add("hidden");
   state.paused = false;
+  state.roundLocked = false;
   tutorialCallout.classList.remove("hidden");
-  goalElement.textContent = "Solve forever";
-  statusElement.textContent = "Each round shuffles new numbers onto the animals. Solve the sum, then catch the right answer.";
+  statusElement.textContent = "Solve as many moving farm math puzzles as you can in 5 seconds, then beat your best score.";
   updateHud();
   renderPen();
   startAnimation();
@@ -404,8 +428,7 @@ overlay.addEventListener("click", (event) => {
 
 replayButton.addEventListener("click", () => {
   overlay.classList.add("hidden");
-  state.paused = false;
-  startAnimation();
+  resetGame();
 });
 
 ctaButtons.forEach((button) => {

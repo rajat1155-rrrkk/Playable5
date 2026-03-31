@@ -5,6 +5,7 @@ const statusElement = document.getElementById("status-text");
 const goalElement = document.getElementById("goal-text");
 const tutorialCallout = document.getElementById("tutorial-callout");
 const mathPromptElement = document.getElementById("math-prompt");
+const gameFrameElement = document.querySelector(".game-frame");
 const overlay = document.getElementById("overlay");
 const overlayMessage = document.getElementById("overlay-message");
 const replayButton = document.getElementById("replay-button");
@@ -19,12 +20,6 @@ const adTargetUrl = "https://play.google.com/store";
 const animalSize = 58;
 const padding = 10;
 
-const mathRounds = [
-  { prompt: "2 + 3", answer: 5 },
-  { prompt: "6 - 2", answer: 4 },
-  { prompt: "3 + 4", answer: 7 },
-];
-
 const animalDefinitions = [
   { id: "chick", emoji: "🐥", label: "Chick", value: 5, x: 26, y: 32, vx: 0.23, vy: 0.18 },
   { id: "pig", emoji: "🐷", label: "Pig", value: 8, x: 204, y: 50, vx: -0.18, vy: 0.2 },
@@ -38,6 +33,7 @@ let animalElements = new Map();
 let frameHandle = 0;
 let lastFrameTime = 0;
 let promptBumpHandle = 0;
+let celebrationHandle = 0;
 
 function createGameState() {
   return {
@@ -48,10 +44,61 @@ function createGameState() {
     })),
     roundIndex: 0,
     taps: 0,
-    stars: 3,
-    solved: false,
+    score: 0,
+    streak: 0,
+    paused: false,
     tutorialDone: false,
+    currentQuestion: null,
   };
+}
+
+function randomInt(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function shuffle(values) {
+  const copy = [...values];
+  for (let index = copy.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(0, index);
+    [copy[index], copy[swapIndex]] = [copy[swapIndex], copy[index]];
+  }
+  return copy;
+}
+
+function generateQuestion() {
+  const pick = randomInt(0, 2);
+  if (pick === 0) {
+    const left = randomInt(1, 6);
+    const right = randomInt(1, 6);
+    return { prompt: `${left} + ${right}`, answer: left + right };
+  }
+
+  if (pick === 1) {
+    const answer = randomInt(1, 8);
+    const right = randomInt(1, 4);
+    return { prompt: `${answer + right} - ${right}`, answer };
+  }
+
+  const left = randomInt(2, 4);
+  const right = randomInt(2, 3);
+  return { prompt: `${left} × ${right}`, answer: left * right };
+}
+
+function assignRoundValues() {
+  const question = generateQuestion();
+  const values = new Set([question.answer]);
+
+  while (values.size < state.animals.length) {
+    values.add(randomInt(1, 12));
+  }
+
+  const shuffledValues = shuffle([...values]);
+  state.currentQuestion = question;
+
+  state.animals.forEach((animal, index) => {
+    animal.value = shuffledValues[index];
+    animal.done = false;
+  });
 }
 
 function renderPen() {
@@ -103,8 +150,8 @@ function paintAnimals() {
     tag.textContent = String(animal.value);
     element.appendChild(tag);
 
-    const currentRound = mathRounds[state.roundIndex];
-    const isCurrentAnswer = !state.solved && currentRound && animal.value === currentRound.answer;
+    const currentRound = state.currentQuestion;
+    const isCurrentAnswer = !state.paused && currentRound && animal.value === currentRound.answer;
     element.classList.toggle("target", isCurrentAnswer);
   });
 }
@@ -145,7 +192,7 @@ function animationFrame(timestamp) {
   const delta = Math.min(2.2, (timestamp - lastFrameTime) / 16.67);
   lastFrameTime = timestamp;
 
-  if (!state.solved) {
+  if (!state.paused) {
     updateAnimalPositions(delta);
     frameHandle = window.requestAnimationFrame(animationFrame);
   }
@@ -172,6 +219,25 @@ function pulsePrompt() {
   }, 220);
 }
 
+function pulseSuccessPrompt() {
+  mathPromptElement.classList.remove("success");
+  void mathPromptElement.offsetWidth;
+  mathPromptElement.classList.add("success");
+}
+
+function celebratePen() {
+  penElement.classList.remove("flash");
+  gameFrameElement.classList.remove("celebrate");
+  void penElement.offsetWidth;
+  penElement.classList.add("flash");
+  gameFrameElement.classList.add("celebrate");
+  window.clearTimeout(celebrationHandle);
+  celebrationHandle = window.setTimeout(() => {
+    penElement.classList.remove("flash");
+    gameFrameElement.classList.remove("celebrate");
+  }, 360);
+}
+
 function burstAnimal(element) {
   const burst = document.createElement("div");
   burst.className = "animal-burst";
@@ -179,12 +245,30 @@ function burstAnimal(element) {
   window.setTimeout(() => burst.remove(), 520);
 }
 
+function spawnScoreFloat(element, text) {
+  const float = document.createElement("div");
+  float.className = "score-float";
+  float.textContent = text;
+  float.style.left = "50%";
+  float.style.top = "8px";
+  float.style.transform = "translateX(-50%)";
+  element.appendChild(float);
+  window.setTimeout(() => float.remove(), 760);
+}
+
+function showMilestoneOverlay() {
+  state.paused = true;
+  stopAnimation();
+  overlayMessage.textContent = `Score ${state.score}. Fresh math questions keep coming, and the animals keep getting harder to catch.`;
+  overlay.classList.remove("hidden");
+}
+
 function handleAnimalTap(id) {
-  if (state.solved) {
+  if (state.paused) {
     return;
   }
 
-  const currentRound = mathRounds[state.roundIndex];
+  const currentRound = state.currentQuestion;
   const tappedAnimal = state.animals.find((animal) => animal.id === id);
   if (!tappedAnimal || tappedAnimal.done) {
     return;
@@ -199,7 +283,7 @@ function handleAnimalTap(id) {
   }
 
   if (tappedAnimal.value !== currentRound.answer) {
-    state.stars = Math.max(1, state.stars - 1);
+    state.streak = 0;
     const wrongElement = animalElements.get(id);
     if (wrongElement) {
       wrongElement.classList.remove("wrong");
@@ -211,55 +295,53 @@ function handleAnimalTap(id) {
     return;
   }
 
-  tappedAnimal.done = true;
+  state.score += 1;
+  state.streak += 1;
   state.roundIndex += 1;
   state.tutorialDone = true;
   tutorialCallout.classList.add("hidden");
   if (tappedElement) {
     tappedElement.classList.remove("correct-hit");
+    tappedElement.classList.remove("score-pop");
     void tappedElement.offsetWidth;
     tappedElement.classList.add("correct-hit");
+    tappedElement.classList.add("score-pop");
     burstAnimal(tappedElement);
+    spawnScoreFloat(tappedElement, `+1`);
   }
-
-  if (state.roundIndex >= mathRounds.length) {
-    state.solved = true;
-    state.stars = 3;
-    goalElement.textContent = "Math solved";
-    statusElement.textContent = "Perfect. You solved every farm sum.";
-    overlayMessage.textContent = `Solved in ${state.taps} tap${state.taps === 1 ? "" : "s"}. Quick, readable, and satisfying.`;
-    updateHud();
-    paintAnimals();
-    stopAnimation();
-    window.setTimeout(() => overlay.classList.remove("hidden"), 420);
-    return;
-  }
-
-  const nextRound = mathRounds[state.roundIndex];
-  statusElement.textContent = `Correct. Now solve ${nextRound.prompt}.`;
+  celebratePen();
+  pulseSuccessPrompt();
+  assignRoundValues();
+  statusElement.textContent = `Correct. New round: solve ${state.currentQuestion.prompt}.`;
   pulsePrompt();
   updateHud();
   paintAnimals();
+
+  if (state.score % 5 === 0) {
+    window.setTimeout(showMilestoneOverlay, 280);
+  }
 }
 
 function updateHud() {
   movesElement.textContent = String(state.taps);
-  chargeElement.textContent = String(state.stars);
-  const currentRound = mathRounds[Math.min(state.roundIndex, mathRounds.length - 1)];
-  if (currentRound && !state.solved) {
+  chargeElement.textContent = String(state.score);
+  const currentRound = state.currentQuestion;
+  if (currentRound) {
     mathPromptElement.textContent = `${currentRound.prompt} = ?`;
   } else {
-    mathPromptElement.textContent = "Solved";
+    mathPromptElement.textContent = "?";
   }
 }
 
 function resetGame() {
   stopAnimation();
   state = createGameState();
+  assignRoundValues();
   overlay.classList.add("hidden");
+  state.paused = false;
   tutorialCallout.classList.remove("hidden");
-  goalElement.textContent = "Solve 3 sums";
-  statusElement.textContent = "Each animal carries a number. Solve the sum, then tap the correct answer while they move.";
+  goalElement.textContent = "Solve forever";
+  statusElement.textContent = "Each round shuffles new numbers onto the animals. Solve the sum, then catch the right answer.";
   updateHud();
   renderPen();
   startAnimation();
@@ -274,7 +356,19 @@ penElement.addEventListener("click", (event) => {
   handleAnimalTap(animal.dataset.id);
 });
 
-replayButton.addEventListener("click", resetGame);
+overlay.addEventListener("click", (event) => {
+  if (event.target === overlay) {
+    overlay.classList.add("hidden");
+    state.paused = false;
+    startAnimation();
+  }
+});
+
+replayButton.addEventListener("click", () => {
+  overlay.classList.add("hidden");
+  state.paused = false;
+  startAnimation();
+});
 
 ctaButtons.forEach((button) => {
   button.addEventListener("click", () => {
@@ -282,6 +376,7 @@ ctaButtons.forEach((button) => {
   });
 });
 
+assignRoundValues();
 updateHud();
 renderPen();
 startAnimation();

@@ -207,6 +207,15 @@ h2 {
   font-size: 0.96rem;
   font-weight: 900;
   text-align: center;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.math-pill.bump {
+  transform: scale(1.06);
+  box-shadow:
+    0 0 0 3px rgba(255, 206, 100, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.35);
 }
 
 .pen {
@@ -259,27 +268,42 @@ h2 {
     inset 0 0 0 1px rgba(255, 255, 255, 0.7);
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
+  transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(var(--scale, 1));
+  transition:
+    transform 0.14s ease,
+    box-shadow 0.14s ease,
+    opacity 0.14s ease,
+    filter 0.14s ease;
+  will-change: transform;
 }
 
 .animal:active {
-  transform: scale(0.96);
+  --scale: 0.94;
 }
 
 .animal.target {
   box-shadow:
     0 0 0 3px rgba(255, 206, 100, 0.22),
-    0 8px 18px rgba(106, 73, 38, 0.14),
+    0 12px 22px rgba(106, 73, 38, 0.18),
     inset 0 0 0 1px rgba(255, 255, 255, 0.7);
+  filter: saturate(1.06);
 }
 
 .animal.done {
   opacity: 0.6;
-  transform: scale(0.92);
+  --scale: 0.9;
 }
 
 .animal.wrong {
   animation: animal-shake 0.28s ease;
+}
+
+.animal.tap-pop {
+  animation: animal-pop 0.24s ease;
+}
+
+.animal.correct-hit {
+  animation: animal-correct 0.42s ease;
 }
 
 .animal-face {
@@ -289,6 +313,16 @@ h2 {
   place-items: center;
   font-size: 2rem;
   user-select: none;
+  transition: transform 0.16s ease, filter 0.16s ease;
+}
+
+.animal.target .animal-face {
+  animation: target-bob 1.2s ease-in-out infinite;
+}
+
+.animal.tap-pop .animal-face,
+.animal.correct-hit .animal-face {
+  transform: scale(1.08);
 }
 
 .animal-tag {
@@ -306,6 +340,35 @@ h2 {
   font-size: 0.84rem;
   font-weight: 900;
   box-shadow: 0 4px 8px rgba(106, 73, 38, 0.18);
+  transition: transform 0.16s ease, box-shadow 0.16s ease;
+}
+
+.animal.target .animal-tag {
+  animation: tag-pulse 1s ease-in-out infinite;
+}
+
+.animal-burst {
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+}
+
+.animal-burst::before,
+.animal-burst::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 22px;
+  border: 2px solid rgba(255, 206, 100, 0.65);
+  opacity: 0;
+}
+
+.animal-burst::before {
+  animation: burst-ring 0.45s ease-out;
+}
+
+.animal-burst::after {
+  animation: burst-ring 0.45s ease-out 0.08s;
 }
 
 .side-panel {
@@ -395,6 +458,61 @@ h2 {
   }
   75% {
     transform: translateX(4px);
+  }
+}
+
+@keyframes animal-pop {
+  0% {
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1);
+  }
+  50% {
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1.12);
+  }
+  100% {
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1);
+  }
+}
+
+@keyframes animal-correct {
+  0% {
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(1);
+  }
+  35% {
+    transform: translate(var(--x, 0px), calc(var(--y, 0px) - 8px)) rotate(var(--tilt, 0deg)) scale(1.14);
+  }
+  100% {
+    transform: translate(var(--x, 0px), var(--y, 0px)) rotate(var(--tilt, 0deg)) scale(0.9);
+  }
+}
+
+@keyframes target-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes tag-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.08);
+  }
+}
+
+@keyframes burst-ring {
+  0% {
+    transform: scale(0.72);
+    opacity: 0.8;
+  }
+  100% {
+    transform: scale(1.26);
+    opacity: 0;
   }
 }
 

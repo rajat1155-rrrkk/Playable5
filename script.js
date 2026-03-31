@@ -37,10 +37,15 @@ let state = createGameState();
 let animalElements = new Map();
 let frameHandle = 0;
 let lastFrameTime = 0;
+let promptBumpHandle = 0;
 
 function createGameState() {
   return {
-    animals: animalDefinitions.map((animal) => ({ ...animal, done: false })),
+    animals: animalDefinitions.map((animal, index) => ({
+      ...animal,
+      done: false,
+      phase: index * 0.9,
+    })),
     roundIndex: 0,
     taps: 0,
     stars: 3,
@@ -81,7 +86,11 @@ function paintAnimals() {
       return;
     }
 
-    element.style.transform = `translate(${animal.x}px, ${animal.y}px)`;
+    const bob = Math.sin(animal.phase) * 3;
+    const tilt = Math.sin(animal.phase * 0.7) * 2.2;
+    element.style.setProperty("--x", `${animal.x}px`);
+    element.style.setProperty("--y", `${animal.y + bob}px`);
+    element.style.setProperty("--tilt", `${tilt}deg`);
     element.classList.toggle("done", animal.done);
 
     const existingTag = element.querySelector(".animal-tag");
@@ -110,6 +119,7 @@ function updateAnimalPositions(delta) {
       return;
     }
 
+    animal.phase += 0.035 * delta;
     animal.x += animal.vx * delta;
     animal.y += animal.vy * delta;
 
@@ -152,6 +162,23 @@ function stopAnimation() {
   frameHandle = 0;
 }
 
+function pulsePrompt() {
+  mathPromptElement.classList.remove("bump");
+  void mathPromptElement.offsetWidth;
+  mathPromptElement.classList.add("bump");
+  window.clearTimeout(promptBumpHandle);
+  promptBumpHandle = window.setTimeout(() => {
+    mathPromptElement.classList.remove("bump");
+  }, 220);
+}
+
+function burstAnimal(element) {
+  const burst = document.createElement("div");
+  burst.className = "animal-burst";
+  element.appendChild(burst);
+  window.setTimeout(() => burst.remove(), 520);
+}
+
 function handleAnimalTap(id) {
   if (state.solved) {
     return;
@@ -164,6 +191,12 @@ function handleAnimalTap(id) {
   }
 
   state.taps += 1;
+  const tappedElement = animalElements.get(id);
+  if (tappedElement) {
+    tappedElement.classList.remove("tap-pop");
+    void tappedElement.offsetWidth;
+    tappedElement.classList.add("tap-pop");
+  }
 
   if (tappedAnimal.value !== currentRound.answer) {
     state.stars = Math.max(1, state.stars - 1);
@@ -182,6 +215,12 @@ function handleAnimalTap(id) {
   state.roundIndex += 1;
   state.tutorialDone = true;
   tutorialCallout.classList.add("hidden");
+  if (tappedElement) {
+    tappedElement.classList.remove("correct-hit");
+    void tappedElement.offsetWidth;
+    tappedElement.classList.add("correct-hit");
+    burstAnimal(tappedElement);
+  }
 
   if (state.roundIndex >= mathRounds.length) {
     state.solved = true;
@@ -198,6 +237,7 @@ function handleAnimalTap(id) {
 
   const nextRound = mathRounds[state.roundIndex];
   statusElement.textContent = `Correct. Now solve ${nextRound.prompt}.`;
+  pulsePrompt();
   updateHud();
   paintAnimals();
 }
